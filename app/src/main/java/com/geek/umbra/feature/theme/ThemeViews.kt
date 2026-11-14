@@ -476,7 +476,10 @@ private fun ShopThemesBody() {
             if (list.isEmpty() && !failed) Text(stringResource(R.string.theme_shopEmpty), color = c.muted, style = TextStyle(fontSize = 14.5.sp))
             list.chunked(2).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    row.forEach { e -> ShopThemeCard(e, statusOf(e, applied, trial, installed), installed, Modifier.weight(1f)) }
+                    row.forEach { e ->
+                        val upd = updateOf(e, installed)
+                        ShopThemeCard(e, statusOf(e, applied, trial, installed), installed, upd, Modifier.weight(1f))
+                    }
                     if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
@@ -485,9 +488,16 @@ private fun ShopThemesBody() {
     }
 }
 
+/** 目录版本比本机已装的大 → 返回新版本号（可更新）；内置 / 没装好 / 格式不合法都不提示。 */
+private fun updateOf(e: ThemeCatalogEntry, installed: List<InstalledTheme>): String? {
+    if (ThemeStore.isBuiltin(e.id)) return null
+    val mine = installed.firstOrNull { it.id == e.id && it.failure == null } ?: return null
+    return ThemeVersion.newer(e.version, mine.version)
+}
+
 /** 一张卡：上半浅 / 深两片并排（同 PC 商城），名字、一句「浅色 + 深色两套，只换颜色」、价格 + 状态字（卡太窄，不画图标）。 */
 @Composable
-private fun ShopThemeCard(e: ThemeCatalogEntry, st: kotlin.Pair<String, Boolean>?, installed: List<InstalledTheme>, modifier: Modifier) {
+private fun ShopThemeCard(e: ThemeCatalogEntry, st: kotlin.Pair<String, Boolean>?, installed: List<InstalledTheme>, update: String?, modifier: Modifier) {
     val c = UmbraTheme.colors
     val pal = installed.firstOrNull { it.id == e.id }?.palette ?: thumbPalette(e.preview)
     // 使用中的那张：2px 橙环 + 右上角勾（设计侧 346；商城卡点开是「查看详情」，不是选中态，两种状态不混）
@@ -506,7 +516,21 @@ private fun ShopThemeCard(e: ThemeCatalogEntry, st: kotlin.Pair<String, Boolean>
             Text(stringResource(R.string.theme_bothModes), color = c.muted, style = TextStyle(fontSize = 12.sp), maxLines = 2)
             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(priceText(e), color = c.muted, style = TextStyle(fontSize = 12.sp), modifier = Modifier.weight(1f), maxLines = 1)
-                st?.let { (text, accent) -> Text(text, color = if (accent) c.orangeText else c.muted, style = TextStyle(fontSize = 12.sp)) }
+                if (update != null) {
+                    // 可更新：橙软底胶囊 + 版本号跟在胶囊外（PC 2970ff8）；卡本身不加环、不加角标，不与「在用」抢
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.clip(CircleShape).background(c.orangeSoft).padding(horizontal = 8.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            UmbraIcon(UmbraIconPaths.chevronUp, c.orangeText, size = 10.dp, strokeWidth = 2.4f)
+                            Spacer(Modifier.width(3.dp))
+                            Text("可更新", color = c.orangeText, style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold))
+                        }
+                        Spacer(Modifier.width(6.dp))
+                        Text(update, color = c.faint, style = TextStyle(fontSize = 11.5.sp, fontFeatureSettings = "tnum"))
+                    }
+                } else st?.let { (text, accent) -> Text(text, color = if (accent) c.orangeText else c.muted, style = TextStyle(fontSize = 12.sp)) }
             }
         }
     }
@@ -536,6 +560,7 @@ fun ShopThemePage(id: String) {
     }
     val pal = installed.firstOrNull { it.id == e.id }?.palette ?: thumbPalette(e.preview)
     val isInstalled = ThemeStore.isBuiltin(e.id) || installed.any { it.id == e.id && it.failure == null }
+    val update = updateOf(e, installed)
     val member = isMemberTheme(e)
     val (memberOn, memberUntil) = memberActive(e, grants)
     UmbraScreen(
@@ -545,8 +570,9 @@ fun ShopThemePage(id: String) {
                 Modifier.fillMaxWidth().background(c.bg).padding(start = UmbraDimens.pagePadX, end = UmbraDimens.pagePadX, top = 10.dp, bottom = 12.dp).navigationBarsPadding(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                // 钮与 PC 一致：未装［试用］［获取］；已装［试用］［用这个］；在用整颗灰「在用」。随会员而没会员：「获取」灰着。
-                if (applied.id == e.id && trial == null) {
+                // 钮与 PC 一致：未装［试用］［获取］；已装［试用］［用这个］；在用整颗灰「在用」；
+                // 有可更新版本时主钮换成橙的「更新到 x.y.z」（在用也照常可更新，试用保留）。随会员而没会员：「获取」灰着。
+                if (applied.id == e.id && trial == null && update == null) {
                     UmbraButton(stringResource(R.string.theme_inUse), {}, Modifier.weight(1f), enabled = false, height = 50.dp)
                 } else {
                     UmbraButton(stringResource(if (trying) R.string.theme_downloading else R.string.theme_trial), {
@@ -559,7 +585,12 @@ fun ShopThemePage(id: String) {
                             trying = false
                         }
                     }, Modifier.weight(1f), kind = UmbraButtonKind.Secondary, height = 50.dp)
-                    if (isInstalled) {
+                    if (update != null) {
+                        UmbraButton(
+                            if (busy == e.id) "更新中…" else "更新到 $update",
+                            { updateTheme(e) }, Modifier.weight(1f), enabled = busy != e.id, height = 50.dp,
+                        )
+                    } else if (isInstalled) {
                         UmbraButton(stringResource(R.string.theme_use), { ThemeStore.use(e.id) }, Modifier.weight(1f), height = 50.dp)
                     } else {
                         val blocked = member && !memberOn
@@ -590,7 +621,7 @@ fun ShopThemePage(id: String) {
             UmbraSettingRow(str(R.string.theme_specBy), value = e.author.ifEmpty { str(R.string.brand_name) }),
             UmbraSettingRow(str(R.string.theme_specHas), value = str(R.string.theme_specModes)),
             UmbraSettingRow(str(R.string.theme_specPrice), value = priceText(e)),
-        ))
+        ) + (update?.let { v -> listOf(UmbraSettingRow("版本", value = v + (installed.firstOrNull { it.id == e.id }?.version?.let { "（本机 $it）" } ?: ""))) } ?: emptyList()))
         if (member) {
             // 随会员那一句：有会员「它随会员提供，你的会员 10-12 到期。」，没会员只写「它随会员提供。」（不给开会员的入口，同 193 的口径）
             val line = if (memberOn && memberUntil != null) str(R.string.theme_memberUntil, themeMonthDay(memberUntil)) else str(R.string.theme_memberOnly)
@@ -614,6 +645,18 @@ private fun get(e: ThemeCatalogEntry) {
     if (ThemeStore.hasActiveGrant(e.id) || e.price == 0) { run(); return }
     if (!ThemeShopRules.mayBuy(e.price)) { router.showToast(str(R.string.android_theme_priceUnknown)); return }
     router.confirm(buyAlert(e) { run() })
+}
+
+/**
+ * 「更新到 x.y.z」：重新下载覆盖安装 → 刷新已装 → 在用的那套就地重载；成功 toast「已更新到 x.y.z」，
+ * 失败按下载 / 验签 / 配色 / 重载哪一步的原因说（ThemeStore.update 原样带回）。
+ */
+private fun updateTheme(e: ThemeCatalogEntry) {
+    if (ThemeStore.busyId.value != null) return
+    AppGraph.scope.launch {
+        val why = ThemeStore.update(e)
+        router.showToast(if (why == null) "已更新到 ${e.version}" else "没更新成：$why")
+    }
 }
 
 private fun buyAlert(e: ThemeCatalogEntry, onCancel: (() -> Unit)? = null, onConfirm: () -> Unit) = UmbraAlert(

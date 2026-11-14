@@ -622,6 +622,35 @@ object ThemeStore {
         }
     }
 
+    /**
+     * 更新到目录里的新版本（2026-11-14，同 PC `updateTheme`）：重新下载覆盖安装 → 刷新已装 → 在用的那套就地重载。
+     * 回 null = 成了；否则是下载 / 验签 / 配色 / 重载哪一步的原因（fetch 那三段式的原因原样带回）。
+     */
+    suspend fun update(e: ThemeCatalogEntry): String? {
+        if (_busyId.value != null) return null
+        _busyId.value = e.id
+        try {
+            when (val r = fetch(e)) {
+                is ThemeResult.Err -> return r.fail.why
+                is ThemeResult.Ok -> {
+                    val ok = withContext(Dispatchers.IO) { io.withLock { runCatching { save(r.value.first, r.value.second.manifest) }.isSuccess } }
+                    if (!ok) return "这台手机存不下这个主题"
+                }
+            }
+            scanInstalled()
+            // 在用的那套：新版本换色立刻生效
+            if (_applied.value.id == e.id) {
+                when (val r = resolve(e.id)) {
+                    is Resolution.Ok -> apply(r.theme)
+                    is Resolution.Fail -> return r.fallback.fail.why
+                }
+            }
+            return null
+        } finally {
+            _busyId.value = null
+        }
+    }
+
     /** 试用一个商城主题：装着的直接用；没装的临时下载、验签、过门槛，不落盘（「用这个」再去拿）。 */
     suspend fun trialFromShop(e: ThemeCatalogEntry, onKeep: suspend () -> String?): String? {
         val t = _installed.value.firstOrNull { it.id == e.id }
