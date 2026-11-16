@@ -29,7 +29,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 通知权限请求器必须在 STARTED 之前注册；冷启动没问过就问一次（iOS 4bad681）
+        // 通知权限请求器必须在 STARTED 之前注册（只登记，不申请）。**冷启动不问**：新装用户还没理解产品就弹系统框太打扰
+        // （sam 2026-11-16）。真正申请只在用到通知的入口：保存提醒后、开启执勤成功后、点「去开启」。
         NotificationPermission.launcher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {
             NotificationPermission.onResult(it)
         }
@@ -41,7 +42,6 @@ class MainActivity : AppCompatActivity() {
             val prefs by AppGraph.prefs.snapshot.collectAsState()
             UmbraTheme(Appearance.of(prefs[Prefs.K.appearance])) { AppShell() }
         }
-        NotificationPermission.requestIfNeeded()
     }
 
     override fun onResume() {
