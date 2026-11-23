@@ -14,10 +14,13 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * 通知权限的唯一入口 —— 对应 iOS App/PushRegistry.swift 的 requestIfNeeded / enableTapped（iOS 4bad681）。
+ * 提醒、执勤的申请都走这里：统一写 notifyAsked、统一用 MainActivity 登记的进程级 launcher（issue #4，
+ * 执勤曾自备一套 launcher 不写 notifyAsked，status() 就跟执勤问过没有脱节）。
  *
- * iOS 那次改动的起因同样适用于 Android：权限要等到新建提醒时才问；而「去开启」直接跳系统设置 —— 新装的用户
+ * iOS 那次改动的起因同样适用于 Android：权限要等到用到通知时才问；而「去开启」直接跳系统设置 —— 新装的用户
  * 从没被问过，Android 13+ 上系统设置里虽然有开关，但用户期待的是一个授权框。所以：
- * - 冷启动没问过就问一次（未登录也问：提醒是单机功能）；
+ * - 冷启动不问（sam 2026-11-16）：onCreate 只登记 launcher。真正申请在用到通知的入口 —— 保存提醒后、
+ *   开启执勤 / 新建执勤成功后、点「去开启 / 开启通知」；
  * - 「去开启 / 去系统设置」：没问过 → 当场弹授权框；问过了（拒过 / 在设置里关了）→ 跳本 App 的通知设置页。
  * Android 12 及以下没有运行时权限（默认开着），只可能是用户在设置里关了，一律跳设置。
  */

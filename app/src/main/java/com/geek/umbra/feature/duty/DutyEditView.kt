@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.geek.umbra.R
 import com.geek.umbra.app.AppGraph
+import com.geek.umbra.app.NotificationPermission
 import com.geek.umbra.designsystem.UmbraChoice
 import com.geek.umbra.designsystem.UmbraChoiceItem
 import com.geek.umbra.designsystem.UmbraColorScheme
@@ -61,7 +62,6 @@ internal fun DutyEditView(id: String?) {
             if (item != null) draft = DutyDraft.of(item, today) else if (id == null) draft = DutyDraft.new(today)
         }
     }
-    DutyPushHost()
 
     val ed = Editor(ctx, tr, c, st) { f -> draft?.let { draft = f(it) } }
     val d = draft
@@ -97,8 +97,9 @@ internal fun DutyEditView(id: String?) {
                     val it0 = DutyStore.state.value.list?.items?.firstOrNull { it.id == id }
                     val err: DutyRes.Failed? = if (id != null && it0 != null) DutyStore.save(it0, cur) else {
                         val e = DutyStore.createCustom(cur)
-                        // 新建这一下也算「开执勤」：要通知权限（契约 §16.7）。
-                        if (e == null) DutyPush.requestIfNeeded()
+                        // 新建这一下也算「开执勤」：要通知权限（契约 §16.7）。走 NotificationPermission，
+                        // 真正发起时那边会写 notifyAsked（issue #4）。
+                        if (e == null) NotificationPermission.requestIfNeeded()
                         e
                     }
                     saving = false
