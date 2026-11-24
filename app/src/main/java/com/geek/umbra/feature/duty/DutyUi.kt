@@ -1,5 +1,5 @@
 // 执勤几页共用的画法：设置式分组 / 行（iOS UmbraSettingsKit 的 UmbraSettingSection / UmbraSettingRow）、底部选择器、
-// 填一格文字的弹层、只有「知道了」的说明框、时间面板、通知权限。
+// 填一格文字的弹层、只有「知道了」的说明框、时间面板、通知被拒的展示态。
 //
 // 为什么不直接用 designsystem 的 UmbraSettingRow / settingSection：
 //   ① iOS 的行「有开关就只认开关」（整行不可点，防误触，UmbraSettingsKit.swift:298），Android 那一版整行点击 = 切换；
@@ -8,15 +8,7 @@
 // 不改地基（不许改已有 designsystem 文件），在本包里照 iOS 写一份；尺寸、颜色全取 token。
 package com.geek.umbra.feature.duty
 
-import android.Manifest
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
-import android.provider.Settings
 import android.text.format.DateFormat
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -31,14 +23,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -46,13 +33,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.geek.umbra.R
 import com.geek.umbra.app.AppGraph
+import com.geek.umbra.app.NotificationPermission
 import com.geek.umbra.designsystem.UmbraDimens
 import com.geek.umbra.designsystem.UmbraGroupCard
 import com.geek.umbra.designsystem.UmbraIcon
@@ -61,8 +44,10 @@ import com.geek.umbra.designsystem.UmbraRowDivider
 import com.geek.umbra.designsystem.UmbraSectionLabel
 import com.geek.umbra.designsystem.UmbraSwitch
 import com.geek.umbra.designsystem.UmbraTheme
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
@@ -281,65 +266,28 @@ internal fun dutyDayHeader(day: String, locale: Locale): String {
     return f.format(java.util.Date(d.atStartOfDay(DutyRules.tz).toInstant().toEpochMilli()))
 }
 
-// MARK: - 通知权限（iOS PushRegistry 的执勤那一半）
+// MARK: - 通知被拒的展示态（申请收敛到 NotificationPermission，issue #4）
 
 /**
- * 执勤到点发的消息要能在手机上弹出来：开执勤 / 开早报 / 新建一条成功之后申请通知权限（契约 §16.7）；
+ * 执勤到点发的消息要能在手机上弹出来：开执勤 / 新建一条成功之后申请通知权限（契约 §16.7）；
  * 被拒了在总开关下面给一条「去设置里打开通知」。
  *
- * Android 13+ 才有运行时的 POST_NOTIFICATIONS；更早的系统只能看「通知开没开」（用户在系统设置里关）。
  * ⚠️ 服务端推送（APNs 那一路）Android 还没有（待服务端 FCM / 厂商通道，见开发文档第六节）：
  * 现在通知只在 App 前台连着长连接时由本地通知发出，这一行权限是为那一天先铺好。
+ *
+ * 申请 / 「去开启」统一走 [NotificationPermission]（进程级 launcher 在 MainActivity 登记，真正发起时写
+ * notifyAsked —— 执勤以前自备一套 Compose launcher 和待弹标记，不写 notifyAsked，「我 › 通知」那格就跟
+ * 执勤问过没有脱节，见 issue #4）。这里只剩「现在能不能弹通知」的展示态：订阅它的 tick，权限结果回来 /
+ * 回前台时跟着重算，页面不用再自备 lifecycle observer。
  */
 internal object DutyPush {
-    private val _denied = MutableStateFlow(false)
-    /** 通知被关了（权限被拒或系统设置里关了）。 */
-    val denied: StateFlow<Boolean> = _denied
-
-    /**
-     * 待弹的权限申请（申请必须从 Activity 发起，由页面里的 [DutyPushHost] 接）。用「挂着的标记」而不是一次性事件：
-     * 编辑页存完立刻退回，事件若落在正被拆掉的那一页上就丢了；标记会被执勤页的那一个接住。
-     */
-    val pending = MutableStateFlow(false)
-
-    fun refresh(ctx: Context = AppGraph.context) {
-        _denied.value = !NotificationManagerCompat.from(ctx).areNotificationsEnabled()
-    }
-
-    /** 还没给权限就申请一次（已拒绝过的系统自己不再弹，无害）。 */
-    fun requestIfNeeded(ctx: Context = AppGraph.context) {
-        if (Build.VERSION.SDK_INT < 33) return
-        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
-        pending.value = true
-    }
-
-    /** 去系统的「这个 App 的通知」设置页。 */
-    fun openSettings(ctx: Context) {
-        val i = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-            .putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { ctx.startActivity(i) }
-    }
-}
-
-/** 挂在执勤页 / 编辑页里：接 [DutyPush.pending] 弹系统权限框；回前台时刷新「被拒」那一格。 */
-@Composable
-internal fun DutyPushHost() {
-    val ctx = LocalContext.current
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { DutyPush.refresh(ctx) }
-    LaunchedEffect(Unit) {
-        DutyPush.refresh(ctx)
-        DutyPush.pending.collect { want ->
-            if (want) {
-                DutyPush.pending.value = false
-                if (Build.VERSION.SDK_INT >= 33) runCatching { launcher.launch(Manifest.permission.POST_NOTIFICATIONS) }
-            }
-        }
-    }
-    val owner = LocalLifecycleOwner.current
-    DisposableEffect(owner) {
-        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) DutyPush.refresh(ctx) }
-        owner.lifecycle.addObserver(obs)
-        onDispose { owner.lifecycle.removeObserver(obs) }
+    /** 通知被关了（没问过 / 拒过 / 系统设置里关了，界面只分「能弹 / 不能弹」两档）。 */
+    val denied: StateFlow<Boolean> by lazy {
+        NotificationPermission.tick
+            .map { NotificationPermission.status() != NotificationPermission.Status.Granted }
+            .stateIn(
+                AppGraph.scope, SharingStarted.Eagerly,
+                NotificationPermission.status() != NotificationPermission.Status.Granted,
+            )
     }
 }

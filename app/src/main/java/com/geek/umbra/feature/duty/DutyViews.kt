@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.geek.umbra.R
 import com.geek.umbra.app.AppGraph
+import com.geek.umbra.app.NotificationPermission
 import com.geek.umbra.designsystem.UmbraChoice
 import com.geek.umbra.designsystem.UmbraChoiceItem
 import com.geek.umbra.designsystem.UmbraColorScheme
@@ -61,7 +62,6 @@ internal fun DutyHomeView() {
         DutyStore.appear()
         onDispose { DutyStore.disappear() }
     }
-    DutyPushHost()
 
     val title = ctx.getString(R.string.duty_title)
     UmbraScreen(
@@ -153,10 +153,11 @@ private fun mainSection(ctx: Context, tr: DutyTr, c: UmbraColorScheme, list: Dut
     val rows = mutableListOf(
         DutyRow(ctx.getString(R.string.duty_switch), sub = if (on && !forecast.isNullOrEmpty()) forecast else null, toggle = on) { toggleMaster(ctx, list) },
     )
-    // 通知被拒了（契约 §16.7）：执勤到点发的消息在手机上弹不出来 —— 说一句，给一条去系统设置的路。
+    // 通知被拒了（契约 §16.7）：执勤到点发的消息在手机上弹不出来 —— 说一句，给一条去开启的路
+    // （没问过就当场弹授权框，问过就跳系统设置；与「我 › 通知」同一个 enableTapped，issue #4）。
     if (on && denied) {
         rows += DutyRow(ctx.getString(R.string.duty_push_open), sub = ctx.getString(R.string.duty_push_deniedSub), tint = c.orangeText, chevron = true) {
-            DutyPush.openSettings(ctx)
+            NotificationPermission.enableTapped()
         }
     }
     if (on) {
@@ -230,7 +231,7 @@ private fun askPause(ctx: Context) {
  */
 internal fun afterEnable(err: String?) {
     if (err != null) { dutyReport(err); return }
-    DutyPush.requestIfNeeded()
+    NotificationPermission.requestIfNeeded()
 }
 
 // MARK: 早报卡
