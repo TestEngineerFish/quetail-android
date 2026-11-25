@@ -185,13 +185,16 @@ object JumpRules {
     }
 }
 
-/** 深链 `umbra://`。id 只认 `[A-Za-z0-9_-]{1,64}`；认不出的一律不跳（返回 null）。 */
+/** 深链 `quetail://`（新标识）与旧 `umbra://`。id 只认 `[A-Za-z0-9_-]{1,64}`；认不出的一律不跳（返回 null）。 */
 object DeepLinkRules {
+    /** 认的 scheme：新 `quetail` + 旧 `umbra` 并存（大小写不敏感）。旧的不许删 —— 旧版通知 / 快捷方式 / 已发出去的链接还在写 umbra://。 */
+    val SCHEMES = setOf("quetail", "umbra")
     private val idRe = Regex("^[A-Za-z0-9_-]{1,64}$")
 
     fun route(uri: String): Route? {
         val u = runCatching { java.net.URI(uri) }.getOrNull() ?: return null
-        if (u.scheme?.lowercase() != "umbra") return null
+        val scheme = u.scheme?.lowercase() ?: return null
+        if (scheme !in SCHEMES) return null
         val host = u.host?.lowercase() ?: return null
         val seg = (u.path ?: "").trim('/').split('/').filter { it.isNotEmpty() }
         return when (host) {

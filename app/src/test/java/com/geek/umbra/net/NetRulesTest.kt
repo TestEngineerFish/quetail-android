@@ -49,6 +49,40 @@ class NetRulesTest {
         assertEquals("ws://h.x/ws/chat?src=android&auth=frame", UmbraUrl.chatSocket("http://h.x"))
     }
 
+    /**
+     * 错误头双认（切标识过渡期）：先 X-Quetail-Error，没有或为空回退 X-Umbra-Error；两个都在用新头的值。
+     * 旧常量不删、会话头不动（X-Umbra-Session 不换）。
+     */
+    @Test fun errorHeaderDual() {
+        fun headers(vararg kv: Pair<String, String>): (String) -> String? =
+            { name -> kv.lastOrNull { it.first.equals(name, true) }?.second }
+        assertEquals("X-Umbra-Error", SessionRevokeRules.ERROR_HEADER)
+        assertEquals("X-Quetail-Error", SessionRevokeRules.ERROR_HEADER_NEW)
+        assertEquals("X-Umbra-Session", SessionRevokeRules.SESSION_HEADER)
+        assertEquals("session_invalid", SessionRevokeRules.errorCode(headers("X-Umbra-Error" to "session_invalid")))
+        assertEquals("quota_exhausted", SessionRevokeRules.errorCode(headers("X-Quetail-Error" to "quota_exhausted")))
+        assertEquals("两个都在用新头", "new_code",
+            SessionRevokeRules.errorCode(headers("X-Umbra-Error" to "old_code", "X-Quetail-Error" to "new_code")))
+        assertEquals("新头为空回退旧头", "old_code",
+            SessionRevokeRules.errorCode(headers("X-Quetail-Error" to "", "X-Umbra-Error" to "old_code")))
+        assertNull(SessionRevokeRules.errorCode(headers()))
+        // 只回旧头 / 只回新头，会话失效那档都照分
+        assertTrue(SessionRevokeRules.http(401, SessionRevokeRules.errorCode(headers("X-Umbra-Error" to "session_invalid")), null))
+        assertTrue(SessionRevokeRules.http(401, SessionRevokeRules.errorCode(headers("X-Quetail-Error" to "session_invalid")), null))
+    }
+
+    /** OIDC 回调：新旧 scheme 都过校验；对外发的 redirect_uri 仍是 umbra（Passport 白名单还没有新 scheme）。 */
+    @Test fun oidcCallbackDualScheme() {
+        val tail = "?code=abc&state=st"
+        assertEquals("abc", OidcRules.codeFrom("umbra://auth/callback$tail", "st"))
+        assertEquals("abc", OidcRules.codeFrom("quetail://auth/callback$tail", "st"))
+        assertEquals("scheme 大小写不敏感", "abc", OidcRules.codeFrom("QUETAIL://auth/callback$tail", "st"))
+        assertNull(OidcRules.codeFrom("https://auth/callback$tail", "st"))
+        assertNull("state 对不上不收", OidcRules.codeFrom("quetail://auth/callback$tail", "other"))
+        assertNull("path 不对不收", OidcRules.codeFrom("quetail://auth/other$tail", "st"))
+        assertEquals("umbra://auth/callback", OidcRules.REDIRECT)
+    }
+
     @Test fun revoke() {
         assertTrue(SessionRevokeRules.http(401, "session_invalid", null))
         assertFalse(SessionRevokeRules.http(401, "bad_token", null))

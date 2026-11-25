@@ -45,11 +45,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- umbra:// 深链（任务 / 提醒 / 记账）与 OIDC 回调 umbra://auth/callback -->
+            <!-- 深链（任务 / 提醒 / 记账）与 OIDC 回调 …://auth/callback：新 scheme quetail + 旧 umbra 并存，
+                 本 App 新发的只写 quetail://，旧 umbra:// 照收（旧版通知 / 已发出去的链接还在用） -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="quetail" />
                 <data android:scheme="umbra" />
             </intent-filter>
             <!-- 桌面快捷方式：记一笔 / 记灵感（feature/shortcut，res/xml/shortcuts.xml） -->

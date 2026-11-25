@@ -106,7 +106,7 @@ private fun ReminderWidgetContent(context: Context, shown: List<WidgetTimeRules.
     val gap = if (tight <= TaskNotifyRules.REMINDER_MIN_SLOTS) 9 else 11
     val slots = TaskNotifyRules.reminderSlots(height, PAD_V * 2, HEADER, ROW + gap)
     val (n, more) = TaskNotifyRules.reminderRows(shown.size, slots)
-    Column(GlanceModifier.widgetCard().padding(horizontal = 16.dp, vertical = PAD_V.dp).clickable(deepLinkAction(context, "umbra://reminders"))) {
+    Column(GlanceModifier.widgetCard().padding(horizontal = 16.dp, vertical = PAD_V.dp).clickable(deepLinkAction(context, "quetail://reminders"))) {
         WHeader("提醒 · 今天", trailing = if (shown.isNotEmpty()) "${shown.size} 条" else null)
         if (shown.isEmpty()) {
             Spacer(GlanceModifier.defaultWeight())

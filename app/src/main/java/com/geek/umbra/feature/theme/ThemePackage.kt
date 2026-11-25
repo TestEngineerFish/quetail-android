@@ -499,10 +499,10 @@ object ThemeLicense {
 
     data class Entitlement(val state: State, val until: String? = null, val src: String? = null)
 
-    /** 纯判据：这个主题在 `now` 这一刻的授权状态。多条 grant 取最宽松的那条（买断盖过过期的试用），同 PC `entitlementFrom`。 */
+    /** 纯判据：这个主题在 `now` 这一刻的授权状态。多条 grant 取最宽松的那条（买断盖过过期的试用），同 PC `entitlementFrom`。授权里的 plugin 按别名也认（[PluginId]：许可证可能是切 id 之前签的旧前缀）。 */
     fun entitlement(grants: List<ThemeGrant>?, id: String, now: Instant): Entitlement {
         if (grants == null) return Entitlement(State.Unlicensed)
-        val mine = grants.filter { it.plugin == id }
+        val mine = grants.filter { PluginId.same(it.plugin, id) }
         if (mine.isEmpty()) return Entitlement(State.Unlicensed)
         fun started(g: ThemeGrant) = g.from?.let(::date)?.let { it <= now } ?: true
         fun notEnded(g: ThemeGrant) = g.until?.let(::date)?.let { it >= now } ?: (g.until == null)

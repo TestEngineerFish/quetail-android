@@ -138,7 +138,7 @@ object MoneyApi {
 
     /**
      * 记一笔 / 改一笔。失败**分档**：409 state_conflict + other_ledger 那一档重试永远没用。
-     * 码先看 X-Umbra-Error 头、再看体（统一出口已经替我们按这个顺序取好了）。iOS: HTTPService.swift:693
+     * 码先看错误头（先 X-Quetail-Error，回退 X-Umbra-Error）、再看体（统一出口已经替我们按这个顺序取好了）。iOS: HTTPService.swift:693
      */
     suspend fun putEntry(dto: MoneyEntryDTO, ledgerOverride: Ledger? = null): Result<MoneyPutDTO> {
         val body = UmbraJson.encodeToString(MoneyEntryDTO.serializer(), dto).toRequestBody(UmbraHttp.JSON)

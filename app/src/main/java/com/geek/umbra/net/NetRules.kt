@@ -107,10 +107,19 @@ enum class Ledger(val wire: String, val displayName: String) {
 object SessionRevokeRules {
     const val SESSION_HEADER = "X-Umbra-Session"
     const val ERROR_HEADER = "X-Umbra-Error"
+    /** 新标识的错误码响应头（切 quetail 过渡期）：服务端新旧头都可能回，读的时候先新后旧（[errorCode]）。 */
+    const val ERROR_HEADER_NEW = "X-Quetail-Error"
     const val CODE = "session_invalid"
     const val CLOSE_CODE = 4001
 
-    /** 401 + `X-Umbra-Error: session_invalid`；或任意状态码下 `X-Umbra-Session: invalid`。 */
+    /**
+     * 读错误码响应头（[read] = `Response::header` 那种取法）：先精确读 `X-Quetail-Error`，没有或为空再回退
+     * `X-Umbra-Error`；两个都在时用新头的值。只读不写 —— 客户端不往请求里塞错误头（那是服务端的事）。
+     */
+    fun errorCode(read: (String) -> String?): String? =
+        read(ERROR_HEADER_NEW)?.takeIf { it.isNotEmpty() } ?: read(ERROR_HEADER)?.takeIf { it.isNotEmpty() }
+
+    /** 401 + 错误头（先 `X-Quetail-Error`，回退 `X-Umbra-Error`）`session_invalid`；或任意状态码下 `X-Umbra-Session: invalid`。 */
     fun http(status: Int, errorCode: String?, sessionHeader: String?): Boolean {
         if (status == 401 && errorCode == CODE) return true
         return (sessionHeader ?: "").trim().lowercase() == "invalid"

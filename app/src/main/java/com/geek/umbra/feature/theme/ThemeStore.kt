@@ -156,8 +156,8 @@ object ThemeStore {
 
     // MARK: 内置 / 显示名
 
-    /** 内置主题的名字。只有「默认」。 */
-    fun builtinName(id: String): String? = if (id == ThemeOfficial.DEFAULT_ID) "默认" else null
+    /** 内置主题的名字。只有「默认」。旧 `com.umbra.*` id 按别名也认（[PluginId]，prefs / 装包目录里可能还存着旧前缀）。 */
+    fun builtinName(id: String): String? = if (PluginId.same(id, ThemeOfficial.DEFAULT_ID)) "默认" else null
     fun isBuiltin(id: String) = builtinName(id) != null
 
     private fun english(): Boolean = AppGraph.context.resources.configuration.locales[0]?.language == "en"
@@ -316,14 +316,14 @@ object ThemeStore {
 
     // MARK: 解析
 
-    /** id → 能套上的整套；用不了回原因（错误卡按 kind 选 fallbackCopy 那句话）。 */
+    /** id → 能套上的整套；用不了回原因（错误卡按 kind 选 fallbackCopy 那句话）。id 精确不中再按别名认（旧前缀的已装包 / prefs 值照样解析成同一个主题）。 */
     fun resolve(id: String): Resolution {
         builtinName(id)?.let { return Resolution.Ok(Resolved(id, it, null)) }
-        val t = _installed.value.firstOrNull { it.id == id }
-            ?: return Resolution.Fail(Fallback(id, _catalog.value?.firstOrNull { it.id == id }?.name ?: id, ThemeFail(ThemeFailKind.Broken, "本机没有这个主题")))
-        t.failure?.let { return Resolution.Fail(Fallback(id, t.name, it, t.entitlement.until, t.entitlement.src)) }
-        val p = t.palette ?: return Resolution.Fail(Fallback(id, t.name, ThemeFail(ThemeFailKind.Broken, "读不出配色")))
-        return Resolution.Ok(Resolved(id, t.name, p))
+        val t = _installed.value.firstOrNull { PluginId.same(it.id, id) }
+            ?: return Resolution.Fail(Fallback(id, _catalog.value?.firstOrNull { PluginId.same(it.id, id) }?.name ?: id, ThemeFail(ThemeFailKind.Broken, "本机没有这个主题")))
+        t.failure?.let { return Resolution.Fail(Fallback(t.id, t.name, it, t.entitlement.until, t.entitlement.src)) }
+        val p = t.palette ?: return Resolution.Fail(Fallback(t.id, t.name, ThemeFail(ThemeFailKind.Broken, "读不出配色")))
+        return Resolution.Ok(Resolved(t.id, t.name, p))
     }
 
     // MARK: 应用
@@ -333,7 +333,7 @@ object ThemeStore {
         endTrialSilently()
         fallback.value = null
         _applied.value = r
-        prefs.set(Prefs.K.themeId, r.id.takeIf { it != ThemeOfficial.DEFAULT_ID })
+        prefs.set(Prefs.K.themeId, r.id.takeIf { !PluginId.same(it, ThemeOfficial.DEFAULT_ID) })
         UmbraThemePalette.set(r.palette?.let(::plain))
         writeAppliedCache(r)
         WidgetBridge.themeChanged()
@@ -386,7 +386,7 @@ object ThemeStore {
             runCatching { f.renameTo(File(root, "applied.json.corrupt-${System.currentTimeMillis()}")) }
             return null
         }
-        if (id != selected) return null
+        if (!PluginId.same(id, selected)) return null
         val typed = palette.entries.associate { (m, kv) -> ThemeMode.of(m)!! to kv.mapNotNull { (k, v) -> ThemeKey.of(k)?.let { it to v } }.toMap() }
         return Resolved(id, o.str("name") ?: id, typed) to palette
     }
@@ -482,19 +482,20 @@ object ThemeStore {
         idDir.listFiles().orEmpty().filter { it.name != manifest.version }.forEach { it.deleteRecursively() }
     }
 
-    /** 卸载一个商城主题（内置的卸不掉）。卸的正是现在用的 → 换回默认。 */
+    /** 卸载一个商城主题（内置的卸不掉）。卸的正是现在用的 → 换回默认。叫法可能是别名：删目录按本机实际目录名（装包时的清单 id，新旧前缀都可能）。 */
     suspend fun uninstall(id: String) {
         if (isBuiltin(id)) return
-        val name = shownName(id, _installed.value.firstOrNull { it.id == id }?.name ?: id)
-        withContext(Dispatchers.IO) { io.withLock { File(root, id).deleteRecursively(); scanInstalledLocked() } }
-        if (_trial.value?.theme?.id == id) endTrial(keep = false)
-        if (_applied.value.id == id || prefs[Prefs.K.themeId] == id) {
+        val t = _installed.value.firstOrNull { PluginId.same(it.id, id) }
+        val name = shownName(id, t?.name ?: id)
+        withContext(Dispatchers.IO) { io.withLock { File(root, t?.id ?: id).deleteRecursively(); scanInstalledLocked() } }
+        if (_trial.value?.theme?.id?.let { PluginId.same(it, id) } == true) endTrial(keep = false)
+        if (PluginId.same(_applied.value.id, id) || prefs[Prefs.K.themeId]?.let { PluginId.same(it, id) } == true) {
             apply(default)
             router.showToast("已卸载「$name」，换回了「默认」")
         } else {
             router.showToast("已卸载「$name」")
         }
-        if (fallback.value?.id == id) fallback.value = null
+        if (fallback.value?.id?.let { PluginId.same(it, id) } == true) fallback.value = null
     }
 
     // MARK: 许可证
@@ -539,7 +540,7 @@ object ThemeStore {
     /** 选着的主题这下能用了（授权续上 / 登回来了），而界面还停在因回落而用的「默认」上 → 静默换回去。 */
     private fun restoreChoice() {
         val selected = prefs[Prefs.K.themeId] ?: return
-        if (_trial.value != null || _applied.value.id == selected) return
+        if (_trial.value != null || PluginId.same(_applied.value.id, selected)) return
         val r = (resolve(selected) as? Resolution.Ok)?.theme ?: return
         apply(r)
     }
@@ -580,7 +581,7 @@ object ThemeStore {
         }
         return when (val r = withContext(Dispatchers.Default) { ThemePackage.inspect(bytes, ThemePublisher.PEM) }) {
             is ThemeResult.Err -> r
-            is ThemeResult.Ok -> if (r.value.manifest.id != e.id) ThemeResult.Err(ThemeFail(ThemeFailKind.Broken, "包里的主题不是这一个"))
+            is ThemeResult.Ok -> if (!PluginId.same(r.value.manifest.id, e.id)) ThemeResult.Err(ThemeFail(ThemeFailKind.Broken, "包里的主题不是这一个"))
             else ThemeResult.Ok(bytes to r.value)
         }
     }
@@ -594,17 +595,18 @@ object ThemeStore {
         if (_busyId.value != null) return null
         _busyId.value = e.id
         try {
-            val isInstalled = _installed.value.any { it.id == e.id && it.failure?.kind != ThemeFailKind.Broken && it.failure?.kind != ThemeFailKind.Signature }
+            val isInstalled = _installed.value.any { PluginId.same(it.id, e.id) && it.failure?.kind != ThemeFailKind.Broken && it.failure?.kind != ThemeFailKind.Signature }
             if (!isInstalled && e.packageUrl.isEmpty()) return "发布方还没放安装包"
             var granted = refreshLicense()
-            if (granted?.contains(e.id) != true) {
+            fun grantedFor() = granted?.any { PluginId.same(it, e.id) } == true   // 许可证里可能还签着旧前缀的 id
+            if (!grantedFor()) {
                 if (!ThemeShopRules.mayBuy(e.price)) return str(R.string.android_theme_priceUnknown)
                 when (val r = AppGraph.http.call("POST", "/plugins/${e.id}/buy", JsonObject(emptyMap()))) {
                     is ApiResult.Err -> return r.detail?.takeIf { it.isNotEmpty() && !r.offline } ?: if (r.offline) "连不上服务器，稍后再试" else "没买成，稍后再试"
                     is ApiResult.Ok -> Unit
                 }
                 granted = refreshLicense()
-                if (granted?.contains(e.id) != true) return "许可证里没有这个主题的授权"
+                if (!grantedFor()) return "许可证里没有这个主题的授权"
             }
             if (!isInstalled) {
                 when (val r = fetch(e)) {
@@ -639,7 +641,7 @@ object ThemeStore {
             }
             scanInstalled()
             // 在用的那套：新版本换色立刻生效
-            if (_applied.value.id == e.id) {
+            if (PluginId.same(_applied.value.id, e.id)) {
                 when (val r = resolve(e.id)) {
                     is Resolution.Ok -> apply(r.theme)
                     is Resolution.Fail -> return r.fallback.fail.why
@@ -653,7 +655,7 @@ object ThemeStore {
 
     /** 试用一个商城主题：装着的直接用；没装的临时下载、验签、过门槛，不落盘（「用这个」再去拿）。 */
     suspend fun trialFromShop(e: ThemeCatalogEntry, onKeep: suspend () -> String?): String? {
-        val t = _installed.value.firstOrNull { it.id == e.id }
+        val t = _installed.value.firstOrNull { PluginId.same(it.id, e.id) }
         if (t?.palette != null) {
             startTrial(Resolved(e.id, t.name, t.palette))
             return null
@@ -667,7 +669,7 @@ object ThemeStore {
     /** 回落那张卡上的「重新下载」：包坏了 / 验签不过时重新拿一份装上并换上。 */
     suspend fun redownload(id: String): String? {
         if (_catalog.value == null) loadCatalog()
-        val e = _catalog.value?.firstOrNull { it.id == id } ?: return "商城里找不到这个主题"
+        val e = _catalog.value?.firstOrNull { PluginId.same(it.id, id) } ?: return "商城里找不到这个主题"
         when (val r = fetch(e)) {
             is ThemeResult.Err -> return r.fail.why
             is ThemeResult.Ok -> {

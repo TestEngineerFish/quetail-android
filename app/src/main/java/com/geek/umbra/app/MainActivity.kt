@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import com.geek.umbra.designsystem.Appearance
 import com.geek.umbra.designsystem.UmbraTheme
 import com.geek.umbra.navigation.AppShell
+import com.geek.umbra.navigation.DeepLinkRules
 import com.geek.umbra.navigation.DeepLinks
 import com.geek.umbra.net.Initiator
 import com.geek.umbra.net.Prefs
@@ -54,10 +55,14 @@ class MainActivity : AppCompatActivity() {
         handle(intent)
     }
 
-    /** `umbra://auth/callback` 交给 OIDC；其余 umbra:// 交给深链（门未定时先攥着）。 */
+    /** `<scheme>://auth/callback`（新旧 scheme 都收）交给 OIDC；其余深链交给 [DeepLinks]（门未定时先攥着）。 */
     private fun handle(intent: Intent?) {
         val data = intent?.dataString ?: return
-        if (data.startsWith("umbra://auth/callback")) {
+        val u = runCatching { java.net.URI(data) }.getOrNull()
+        val isCallback = u != null &&
+            u.scheme?.lowercase()?.let { it in DeepLinkRules.SCHEMES } == true &&
+            u.host?.lowercase() == "auth" && u.path == "/callback"
+        if (isCallback) {
             AppGraph.scope.launch { AppGraph.auth.finishOidc(data) }
         } else DeepLinks.receive(data)
     }

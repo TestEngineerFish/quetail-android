@@ -9,7 +9,7 @@ fun TaskListScreen() {
     TaskListView()
 }
 
-/** 任务详情（列表、聊天卡、通知、深链 umbra://task/<id> 都进这里）。 */
+/** 任务详情（列表、聊天卡、通知、深链 quetail://task/<id> —— 旧 umbra:// 同一条 —— 都进这里）。 */
 @Composable
 fun TaskDetailScreen(id: String) {
     TaskDetailView(id)

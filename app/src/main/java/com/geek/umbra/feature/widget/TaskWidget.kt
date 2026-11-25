@@ -91,15 +91,15 @@ private fun TaskWidgetContent(context: Context, snap: TaskWidgetSnapshot?, signe
     val card = GlanceModifier.widgetCard().padding(14.dp)
     val wide = LocalSize.current.width >= WIDE.width
     when {
-        signedOut -> WSignedOut(card.clickable(deepLinkAction(context, "umbra://tasks")))
-        snap == null -> Column(card.clickable(deepLinkAction(context, "umbra://tasks"))) {
+        signedOut -> WSignedOut(card.clickable(deepLinkAction(context, "quetail://tasks")))
+        snap == null -> Column(card.clickable(deepLinkAction(context, "quetail://tasks"))) {
             // 还没有任何快照（还没拉到过任务列表）：说清楚，不摆假数据。
             WHeader("任务")
             Spacer(GlanceModifier.defaultWeight())
             Text("打开 App 的任务页后，这里会显示执行中任务的进度。", style = TextStyle(color = WTheme.muted, fontSize = 12.sp))
         }
         snap.runningTitle != null -> {
-            val open = deepLinkAction(context, "umbra://task/${snap.runningId ?: ""}")
+            val open = deepLinkAction(context, "quetail://task/${snap.runningId ?: ""}")
             val stale = WidgetTimeRules.staleText(snap.savedAtMs, now)
             if (wide) Row(card.clickable(open), verticalAlignment = Alignment.CenterVertically) {
                 // 4×2：环 76（描边 6）放左，右侧四行（出图 #10）。
@@ -128,7 +128,7 @@ private fun TaskWidgetContent(context: Context, snap: TaskWidgetSnapshot?, signe
                 Text(snap.runningTitle, style = TextStyle(color = WTheme.text, fontSize = 12.sp, fontWeight = FontWeight.Medium), maxLines = 1)
             }
         }
-        else -> Column(card.clickable(deepLinkAction(context, "umbra://tasks"))) {
+        else -> Column(card.clickable(deepLinkAction(context, "quetail://tasks"))) {
             WHeader("任务", trailing = WidgetTimeRules.staleText(snap.savedAtMs, now))
             Spacer(GlanceModifier.defaultWeight())
             // 快照不是今天写的就是 0（umbra-ios#85）：那个数是写入那一天的。

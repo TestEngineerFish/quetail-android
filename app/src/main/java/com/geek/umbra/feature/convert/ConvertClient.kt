@@ -65,7 +65,7 @@ data class ConvertJob(
 /** 一次请求的三种结局（被拒时带服务端的分档码与那句话）。 */
 sealed interface ConvertReply<out T> {
     data class Ok<T>(val value: T) : ConvertReply<T>
-    /** 服务端回了非 2xx：`code` = `X-Umbra-Error` 头（按它分档，不按 detail 那句中文）。 */
+    /** 服务端回了非 2xx：`code` = 错误头（先 X-Quetail-Error，回退 X-Umbra-Error；按它分档，不按 detail 那句中文）。 */
     data class Rejected(val status: Int, val code: String?, val detail: String?) : ConvertReply<Nothing>
     /** 没回话：网络断了 / 超时。`timedOut` 单独一档（问电脑能转什么时它就是「电脑没回话」）。 */
     data class Unreachable(val timedOut: Boolean) : ConvertReply<Nothing>

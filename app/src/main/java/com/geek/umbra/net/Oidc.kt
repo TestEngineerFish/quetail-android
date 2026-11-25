@@ -17,10 +17,16 @@ import java.util.concurrent.TimeUnit
 
 /**
  * OIDC（Casdoor）授权码 + PKCE(S256) —— 对应 iOS Networking/OidcRules.swift + Features/Auth/OidcWebAuth.swift。
- * 公开客户端，不带 client_secret。浏览器用 Custom Tabs，回调 `umbra://auth/callback` 由 MainActivity 的 intent-filter 收。
+ * 公开客户端，不带 client_secret。浏览器用 Custom Tabs，回调 `<scheme>://auth/callback` 由 MainActivity 的 intent-filter 收。
  */
 object OidcRules {
+    /**
+     * 对外发出去的 `redirect_uri` 仍是旧 scheme `umbra`：Passport / Casdoor 的回调白名单里还没有
+     * `quetail://auth/callback`，现在切会登不进去。回调解析新旧 scheme 都收（[CALLBACK_SCHEMES]）。
+     */
     const val REDIRECT = "umbra://auth/callback"
+    /** 回调认的 scheme：新 `quetail` + 旧 `umbra`（大小写不敏感，同 DeepLinkRules.SCHEMES）。 */
+    private val CALLBACK_SCHEMES = setOf("quetail", "umbra")
     const val DEFAULT_SCOPE = "openid profile email"
 
     private fun b64url(b: ByteArray) = Base64.encodeToString(b, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
@@ -74,10 +80,10 @@ object OidcRules {
         return c.authorization_endpoint + sep + q.entries.joinToString("&") { "${form(it.key)}=${form(it.value)}" }
     }
 
-    /** 回调校验：scheme umbra / host auth / path /callback，state 一致且非空。返回 code 或 null。 */
+    /** 回调校验：scheme quetail / umbra（[CALLBACK_SCHEMES]）/ host auth / path /callback，state 一致且非空。返回 code 或 null。 */
     fun codeFrom(callback: String, expectedState: String): String? {
         val u = runCatching { URI(callback) }.getOrNull() ?: return null
-        if (u.scheme != "umbra" || u.host != "auth" || u.path != "/callback") return null
+        if (u.scheme?.lowercase()?.let { it in CALLBACK_SCHEMES } != true || u.host?.lowercase() != "auth" || u.path != "/callback") return null
         val q = (u.rawQuery ?: "").split('&').mapNotNull {
             val i = it.indexOf('='); if (i < 0) null else it.substring(0, i) to java.net.URLDecoder.decode(it.substring(i + 1), "UTF-8")
         }.toMap()

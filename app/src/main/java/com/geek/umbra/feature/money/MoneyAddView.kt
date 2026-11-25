@@ -833,7 +833,7 @@ private fun CatPill(form: MoneyAddForm, slug: String) {
 private fun CatGrid(form: MoneyAddForm) {
     val c = UmbraTheme.colors
     // 订阅分类并**真的读它**：by 委托不读就不订阅。深链 / 快捷方式直达这一页时分类晚到，
-    // 只读 MoneyStore 快照的话网格永远是空的（模拟器实测，umbra://money/add 冷启动）。
+    // 只读 MoneyStore 快照的话网格永远是空的（模拟器实测，quetail://money/add 冷启动）。
     val cats by MoneyStore.cats.watch()
     val shape = RoundedCornerShape(14.dp) // iOS MoneyAddView.swift:800 圆角 14
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
