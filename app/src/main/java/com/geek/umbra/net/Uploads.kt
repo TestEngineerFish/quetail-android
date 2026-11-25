@@ -23,7 +23,7 @@ import java.io.ByteArrayOutputStream
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-/** 上传失败分档（iOS NetworkError）。先看 X-Umbra-Error 头，没有再看 body 的 code；无码 413 当单文件太大（多半是反代拦的）。 */
+/** 上传失败分档（iOS NetworkError）。先看错误头（先 X-Quetail-Error，回退 X-Umbra-Error），没有再看 body 的 code；无码 413 当单文件太大（多半是反代拦的）。 */
 sealed interface UploadError {
     data object Unauthorized : UploadError
     data object SessionInvalid : UploadError

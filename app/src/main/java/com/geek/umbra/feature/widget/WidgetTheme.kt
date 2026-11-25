@@ -73,7 +73,7 @@ internal object WTheme {
     val onOrange get() = themed("onAccent", UmbraLight.onAccent, UmbraDark.onAccent)
 }
 
-/** 点小组件 = 打开 MainActivity 并带上 umbra:// 深链（MainActivity.handle → DeepLinks.receive，门关时要登录的页会被丢弃）。 */
+/** 点小组件 = 打开 MainActivity 并带上 quetail:// 深链（MainActivity.handle → DeepLinks.receive；旧 umbra:// 照收，门关时要登录的页会被丢弃）。 */
 internal fun deepLinkAction(context: Context, uri: String): Action =
     actionStartActivity(
         Intent(context, MainActivity::class.java)

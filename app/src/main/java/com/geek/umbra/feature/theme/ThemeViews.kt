@@ -322,7 +322,7 @@ fun AppearancePage() {
                 cards.chunked(2).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         row.forEach { card ->
-                            AppearanceCard(card, mode, inUse = applied.id == card.id && trial == null, trying = trial?.theme?.id == card.id, Modifier.weight(1f))
+                            AppearanceCard(card, mode, inUse = PluginId.same(applied.id, card.id) && trial == null, trying = trial?.theme?.id?.let { PluginId.same(it, card.id) } == true, Modifier.weight(1f))
                         }
                         if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
@@ -389,9 +389,9 @@ private fun AppearanceCard(card: ThemeCard, mode: ThemeMode, inUse: Boolean, try
 private fun tap(card: ThemeCard) {
     val applied = ThemeStore.applied.value
     val trial = ThemeStore.trial.value
-    if (applied.id == card.id && trial == null) return
+    if (PluginId.same(applied.id, card.id) && trial == null) return
     if (!card.usable) { router.showToast(str(R.string.theme_unusableWhy, card.why.orEmpty())); return }
-    if (applied.id == card.id) { AppGraph.scope.launch { ThemeStore.endTrial(keep = false) }; return }
+    if (PluginId.same(applied.id, card.id)) { AppGraph.scope.launch { ThemeStore.endTrial(keep = false) }; return }
     when (val r = ThemeStore.resolve(card.id)) {
         is ThemeStore.Resolution.Ok -> ThemeStore.startTrial(r.theme)
         is ThemeStore.Resolution.Fail -> router.showToast(str(R.string.theme_unusableWhy, r.fallback.fail.why))
@@ -400,7 +400,7 @@ private fun tap(card: ThemeCard) {
 
 /** 卸载确认，字面与 PC 同一套（appearancePage.uninstall）：正在用它时在后面再加一句。卸载不进回收站，不套删除统一文案。 */
 private fun askUninstall(card: ThemeCard, onConfirm: () -> Unit) {
-    val using = ThemeStore.applied.value.id == card.id
+    val using = PluginId.same(ThemeStore.applied.value.id, card.id)
     router.confirm(UmbraAlert(
         title = str(R.string.theme_uninstallTitle, card.name),
         message = str(R.string.theme_uninstallBody) + (if (using) str(R.string.theme_uninstallUsing) else ""),
@@ -436,8 +436,8 @@ private fun priceText(e: ThemeCatalogEntry): String = when {
 
 /** 状态字：未装不写；已装 muted；在用 orangeText。 */
 private fun statusOf(e: ThemeCatalogEntry, applied: ThemeStore.Resolved, trial: ThemeStore.Trial?, installed: List<InstalledTheme>): kotlin.Pair<String, Boolean>? {
-    if (applied.id == e.id && trial == null) return str(R.string.theme_inUse) to true
-    if (ThemeStore.isBuiltin(e.id) || installed.any { it.id == e.id && it.failure == null }) return str(R.string.theme_installed) to false
+    if (PluginId.same(applied.id, e.id) && trial == null) return str(R.string.theme_inUse) to true
+    if (ThemeStore.isBuiltin(e.id) || installed.any { PluginId.same(it.id, e.id) && it.failure == null }) return str(R.string.theme_installed) to false
     return null
 }
 
@@ -491,7 +491,7 @@ private fun ShopThemesBody() {
 /** 目录版本比本机已装的大 → 返回新版本号（可更新）；内置 / 没装好 / 格式不合法都不提示。 */
 private fun updateOf(e: ThemeCatalogEntry, installed: List<InstalledTheme>): String? {
     if (ThemeStore.isBuiltin(e.id)) return null
-    val mine = installed.firstOrNull { it.id == e.id && it.failure == null } ?: return null
+    val mine = installed.firstOrNull { PluginId.same(it.id, e.id) && it.failure == null } ?: return null
     return ThemeVersion.newer(e.version, mine.version)
 }
 
@@ -499,7 +499,7 @@ private fun updateOf(e: ThemeCatalogEntry, installed: List<InstalledTheme>): Str
 @Composable
 private fun ShopThemeCard(e: ThemeCatalogEntry, st: kotlin.Pair<String, Boolean>?, installed: List<InstalledTheme>, update: String?, modifier: Modifier) {
     val c = UmbraTheme.colors
-    val pal = installed.firstOrNull { it.id == e.id }?.palette ?: thumbPalette(e.preview)
+    val pal = installed.firstOrNull { PluginId.same(it.id, e.id) }?.palette ?: thumbPalette(e.preview)
     // 使用中的那张：2px 橙环 + 右上角勾（设计侧 346；商城卡点开是「查看详情」，不是选中态，两种状态不混）
     val inUse = st?.second == true
     val shape = RoundedCornerShape(14.dp)
@@ -551,15 +551,15 @@ fun ShopThemePage(id: String) {
     val scope = rememberCoroutineScope()
     var trying by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { if (ThemeStore.catalog.value == null) ThemeStore.loadCatalog() }
-    val e = catalog?.firstOrNull { it.id == id }
+    val e = catalog?.firstOrNull { PluginId.same(it.id, id) }
     if (e == null) {
         UmbraScreen(title = "", onBack = { router.back() }, topContent = { ThemeTrialBar() }) {
             item(key = "gone") { MeNote(stringResource(if (catalog == null) R.string.theme_loading else R.string.theme_shopGone), size = 14f) }
         }
         return
     }
-    val pal = installed.firstOrNull { it.id == e.id }?.palette ?: thumbPalette(e.preview)
-    val isInstalled = ThemeStore.isBuiltin(e.id) || installed.any { it.id == e.id && it.failure == null }
+    val pal = installed.firstOrNull { PluginId.same(it.id, e.id) }?.palette ?: thumbPalette(e.preview)
+    val isInstalled = ThemeStore.isBuiltin(e.id) || installed.any { PluginId.same(it.id, e.id) && it.failure == null }
     val update = updateOf(e, installed)
     val member = isMemberTheme(e)
     val (memberOn, memberUntil) = memberActive(e, grants)
@@ -572,7 +572,7 @@ fun ShopThemePage(id: String) {
             ) {
                 // 钮与 PC 一致：未装［试用］［获取］；已装［试用］［用这个］；在用整颗灰「在用」；
                 // 有可更新版本时主钮换成橙的「更新到 x.y.z」（在用也照常可更新，试用保留）。随会员而没会员：「获取」灰着。
-                if (applied.id == e.id && trial == null && update == null) {
+                if (PluginId.same(applied.id, e.id) && trial == null && update == null) {
                     UmbraButton(stringResource(R.string.theme_inUse), {}, Modifier.weight(1f), enabled = false, height = 50.dp)
                 } else {
                     UmbraButton(stringResource(if (trying) R.string.theme_downloading else R.string.theme_trial), {
@@ -621,7 +621,7 @@ fun ShopThemePage(id: String) {
             UmbraSettingRow(str(R.string.theme_specBy), value = e.author.ifEmpty { str(R.string.brand_name) }),
             UmbraSettingRow(str(R.string.theme_specHas), value = str(R.string.theme_specModes)),
             UmbraSettingRow(str(R.string.theme_specPrice), value = priceText(e)),
-        ) + (update?.let { v -> listOf(UmbraSettingRow("版本", value = v + (installed.firstOrNull { it.id == e.id }?.version?.let { "（本机 $it）" } ?: ""))) } ?: emptyList()))
+        ) + (update?.let { v -> listOf(UmbraSettingRow("版本", value = v + (installed.firstOrNull { PluginId.same(it.id, e.id) }?.version?.let { "（本机 $it）" } ?: ""))) } ?: emptyList()))
         if (member) {
             // 随会员那一句：有会员「它随会员提供，你的会员 10-12 到期。」，没会员只写「它随会员提供。」（不给开会员的入口，同 193 的口径）
             val line = if (memberOn && memberUntil != null) str(R.string.theme_memberUntil, themeMonthDay(memberUntil)) else str(R.string.theme_memberOnly)

@@ -35,7 +35,7 @@ import java.util.UUID
 object KbNet {
     private val http get() = AppGraph.http
 
-    /** HttpResult → 分档原料。码先看 X-Umbra-Error 头、再看体（统一出口已经这么取了）；storage_full 的三个数从体顶层读。 */
+    /** HttpResult → 分档原料。码先看错误头（先 X-Quetail-Error，回退 X-Umbra-Error）、再看体（统一出口已经这么取了）；storage_full 的三个数从体顶层读。 */
     fun response(r: HttpResult): KbWriteResponse = when (r) {
         is HttpResult.Ok -> KbWriteResponse(r.status, null, null, "")
         is HttpResult.Fail -> {

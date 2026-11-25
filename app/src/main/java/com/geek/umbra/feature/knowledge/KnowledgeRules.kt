@@ -167,7 +167,7 @@ enum class KbTone { Success, Danger, Working }
 
 // MARK: - 写失败分档
 
-/** 一次写请求拿回来的分档原料。没拿到响应时 status 0；code 优先取 X-Umbra-Error 头。 */
+/** 一次写请求拿回来的分档原料。没拿到响应时 status 0；code 优先取错误头（先 X-Quetail-Error，回退 X-Umbra-Error）。 */
 data class KbWriteResponse(
     val status: Int,
     val code: String?,

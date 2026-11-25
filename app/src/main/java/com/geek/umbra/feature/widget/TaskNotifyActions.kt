@@ -1,6 +1,6 @@
 // 任务通知上那几颗动作钮的落点（设计侧第 199 封答复第 9 条）。
 //
-// 为什么要一个跳板 Activity：MainActivity（app/，不归本包）只认 umbra:// 深链，而「去确认」要进秘书会话
+// 为什么要一个跳板 Activity：MainActivity（app/，不归本包）只认 quetail:// / umbra:// 深链，而「去确认」要进秘书会话
 // （没有深链，要调 ChatApi.focus）、「停止」要先记下一次性标记再进详情、「重新发起」要预填输入框。
 // 通知的 PendingIntent 直接指向这个不显示界面的 Activity：做完那一步路由动作就把 MainActivity 拉到前台、自己 finish。
 // Android 12+ 禁止「广播接收器 / 服务当通知跳板再起 Activity」，所以要进 App 的动作一律走 Activity，不走广播。
@@ -71,7 +71,7 @@ class TaskNotifyActivity : Activity() {
             TaskNotifyIntents.STOP -> if (id.isNotEmpty()) {
                 // 先记标记再推详情：详情页拿到详情后读标记弹现成的停止确认（TaskViews.kt confirmStop）。
                 TaskStopRequest.request(id)
-                DeepLinks.receive("umbra://task/$id")
+                DeepLinks.receive("quetail://task/$id")
             }
             // 秘书会话（assistant）：需确认的那句问话就在里面，确认钮挂在任务卡上。
             TaskNotifyIntents.CONFIRM -> if (signedIn) ChatApi.focus("assistant", null)

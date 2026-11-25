@@ -136,7 +136,7 @@ class ChatSocket(
                 if (my != epoch) return
                 // 握手阶段被拒（HTTP 401/403）等同 4001
                 val code = response?.code?.let { if (it == 401 || it == 403) SessionRevokeRules.CLOSE_CODE else 1006 } ?: 1006
-                ended(code, response?.header(SessionRevokeRules.ERROR_HEADER), token)
+                ended(code, response?.let { r -> SessionRevokeRules.errorCode { r.header(it) } }, token)
             }
         })
     }

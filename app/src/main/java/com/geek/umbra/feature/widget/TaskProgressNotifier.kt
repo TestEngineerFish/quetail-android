@@ -280,12 +280,12 @@ object TaskProgressNotifier {
     /** 任务列表那一行的状态词（UmbraStatus 的 label，如需确认是「等你授权」）。 */
     private fun listLine(task: TaskItem): String = UmbraStatus.valueOf(taskStatusOf(task.status).name).label
 
-    /** 点通知 → 这条任务的详情（umbra://task/<id>，深链已在 MainActivity 接好）。 */
+    /** 点通知 → 这条任务的详情（quetail://task/<id>，深链已在 MainActivity 接好）。 */
     /** 落任务列表（服务端已经找不到这条任务，进详情只会是一张「不存在」）。 */
     private fun openTaskList(ctx: Context): PendingIntent =
         PendingIntent.getActivity(
             ctx, "tasks".hashCode(),
-            Intent(ctx, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("umbra://tasks"))
+            Intent(ctx, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("quetail://tasks"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
@@ -293,7 +293,7 @@ object TaskProgressNotifier {
     private fun openTask(ctx: Context, id: String): PendingIntent =
         PendingIntent.getActivity(
             ctx, id.hashCode(),
-            Intent(ctx, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("umbra://task/$id"))
+            Intent(ctx, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("quetail://task/$id"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )

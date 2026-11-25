@@ -10,7 +10,7 @@
 //   `setAndAllowWhileIdle`（可能晚几分钟），列表横幅说明并给「去授权」；
 // - 开机 / 改时间 / 改时区 / 升级后整体重排（ReminderBootReceiver）；
 // - 通知分类：一个 NotificationChannel「提醒」+ 两个 Action「完成」（幂等置完成）/「再等 10 分钟」（从现在推 10 分钟），
-//   由 ReminderActionReceiver 处理；点通知本体 = 打开 MainActivity 带 `umbra://reminder/<id>`（深链进详情）。
+//   由 ReminderActionReceiver 处理；点通知本体 = 打开 MainActivity 带 `quetail://reminder/<id>`（深链进详情）。
 // - ⚠️ 与 iOS 的差别：iOS 排好的通知内容是排的那一刻定死的；这里响的那一刻才从 store 取正文，所以永远是最新的那一版。
 package com.geek.umbra.feature.reminder
 
@@ -165,7 +165,7 @@ object ReminderNotifier {
         val body = if (ahead) ctx.getString(R.string.reminder_notif_aheadBody, r.aheadNotifText, r.text) else r.text
         val open = PendingIntent.getActivity(
             ctx, 0,
-            Intent(ctx, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("umbra://reminder/${r.id}"))
+            Intent(ctx, MainActivity::class.java).setAction(Intent.ACTION_VIEW).setData(Uri.parse("quetail://reminder/${r.id}"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

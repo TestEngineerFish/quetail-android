@@ -18,6 +18,16 @@ class RouteRulesTest {
         assertEquals(Route.InspEdit(null), DeepLinkRules.route("umbra://inspiration/new"))
         assertNull(DeepLinkRules.route("umbra://nope"))
         assertNull(DeepLinkRules.route("https://tasks"))
+        // 新旧 scheme 同一路由（旧 umbra:// 不许丢；新发的写 quetail://）
+        assertEquals(Route.TaskList, DeepLinkRules.route("quetail://tasks"))
+        assertEquals(Route.TaskDetail("abc_1-2"), DeepLinkRules.route("quetail://task/abc_1-2"))
+        assertEquals(Route.RemDetail("r1"), DeepLinkRules.route("quetail://reminder/r1"))
+        assertEquals(Route.MoneyAdd(null), DeepLinkRules.route("quetail://money/add"))
+        assertEquals(Route.MoneyHome, DeepLinkRules.route("quetail://money"))
+        assertEquals(Route.InspEdit(null), DeepLinkRules.route("quetail://inspiration/new"))
+        assertEquals(Route.TaskList, DeepLinkRules.route("quetail://task/bad%20id"))
+        assertNull(DeepLinkRules.route("quetail://nope"))
+        assertEquals("scheme 大小写不敏感", Route.TaskList, DeepLinkRules.route("QUETAIL://tasks"))
     }
 
     @Test fun loginAndTabs() {

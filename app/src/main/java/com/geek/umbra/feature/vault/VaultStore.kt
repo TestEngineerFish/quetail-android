@@ -910,7 +910,7 @@ object VaultStore {
             runCatching { android.provider.Settings.Global.getString(AppGraph.context.contentResolver, android.provider.Settings.Global.DEVICE_NAME) }.getOrNull()?.trim().orEmpty()
         }
 
-    /** 服务端版本闸的错误码（`X-Umbra-Error`，HTTP 426）。 */
+    /** 服务端版本闸的错误码（错误头，先 `X-Quetail-Error` 回退 `X-Umbra-Error`；HTTP 426）。 */
     private const val UPGRADE_REQUIRED = "upgrade_required"
 
 

@@ -190,11 +190,24 @@ class ThemeRulesTest {
         }
         expect(ThemeRules.check(tok("graphite")).palette?.get(ThemeMode.Dark)?.get(ThemeKey.OnAccent), "#1A1A1C", "石墨深色强调实底上是深字")
         expect(ThemeOfficial.BUILTIN_IDS, listOf(ThemeOfficial.DEFAULT_ID), "内置只剩「默认」")
+        // 切标识过渡期（庭宇 11-25）：官方 id 换新前缀 com.quetail.*；旧 com.umbra.* 按别名认作同一套，其它前缀不互认
+        expect(ThemeOfficial.DEFAULT_ID, "com.quetail.theme.default", "默认 id 换 com.quetail.*")
+        expect(ThemeOfficial.SEA_SALT_ID, "com.quetail.theme.sea-salt", "海盐 id 换 com.quetail.*")
+        expect(ThemeOfficial.GRAPHITE_ID, "com.quetail.theme.graphite", "石墨 id 换 com.quetail.*")
+        expect(PluginId.same("com.umbra.theme.default", ThemeOfficial.DEFAULT_ID), true, "旧默认 id 认作同一内置")
+        expect(PluginId.same("com.umbra.theme.sea-salt", ThemeOfficial.SEA_SALT_ID), true, "旧海盐 id 认作同一套")
+        expect(PluginId.same("com.umbra.other.thing", "com.quetail.other.thing"), true, "同一对前缀互换着认")
+        expect(PluginId.same("com.nobody.here", ThemeOfficial.SEA_SALT_ID), false, "非官方前缀不互认")
+        expect(PluginId.same("com.umbra.theme.sea-salt", "com.nobody.here"), false, "别名只在自己那一对前缀之间")
+        expect(ThemeStore.builtinName("com.umbra.theme.default"), "默认", "prefs 里存的旧 id 仍是内置默认")
+        expect(ThemeStore.isBuiltin("com.umbra.theme.sea-salt"), false, "海盐不是内置（id 变了也不算内置）")
+        expect((ThemeStore.resolve("com.umbra.theme.default") as? ThemeStore.Resolution.Ok)?.theme?.name, "默认", "resolve 按别名解析旧 id")
         // 英文对照（geek-17 交代的两条，与 iOS ThemeCopy 同字）
         expect(ThemeCopy.name(ThemeOfficial.SEA_SALT_ID, "海盐", english = true), "Sea Salt", "海盐英文名")
         expect(ThemeCopy.brief(ThemeOfficial.GRAPHITE_ID, "x", english = true), "Neutral gray with no tint and a muted mauve accent. The quietest of the set.", "石墨英文简介")
         expect(ThemeCopy.name(ThemeOfficial.SEA_SALT_ID, "海盐", english = false), "海盐", "中文界面用包里的名字")
         expect(ThemeCopy.name("com.x.theme", "别家", english = true), "别家", "表里没有的退回给的名字")
+        expect(ThemeCopy.name("com.umbra.theme.sea-salt", "海盐", english = true), "Sea Salt", "旧 id 也套英文名")
     }
 
     private fun sha256Hex(b: ByteArray) = MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
@@ -300,6 +313,11 @@ class ThemeRulesTest {
         expect(ThemeLicense.entitlement(later, "com.a.theme", now).state, ThemeLicense.State.NotYet, "还没开始")
         val mixed = listOf(ThemeGrant("x.y", null, "2026-01-01", "trial"), ThemeGrant("x.y", null, null, "purchase"))
         expect(ThemeLicense.entitlement(mixed, "x.y", now), ThemeLicense.Entitlement(ThemeLicense.State.Active, null, "purchase"), "买断盖过过期的试用")
+        // 切标识过渡期：许可证里签的旧前缀 id 对新 id 也算授权（别名只在自己那一对前缀之间认）
+        val old = listOf(ThemeGrant("com.umbra.theme.sea-salt", null, null, "purchase"))
+        expect(ThemeLicense.entitlement(old, "com.quetail.theme.sea-salt", now).state, ThemeLicense.State.Active, "签给旧 id 的授权新 id 照认")
+        expect(ThemeLicense.entitlement(listOf(ThemeGrant("com.quetail.theme.graphite")), "com.umbra.theme.graphite", now).state, ThemeLicense.State.Active, "签给新 id 的授权旧 id 也认")
+        expect(ThemeLicense.entitlement(old, "com.nobody.here", now).state, ThemeLicense.State.Unlicensed, "非官方前缀不互认")
 
         // 按账号（PC #128 的教训）：许可证签给 sub=7，只有账号 7 能用；没登录 / 别的账号都不能用。
         expect(doc.sub, "7", "许可证读出签给的账号")

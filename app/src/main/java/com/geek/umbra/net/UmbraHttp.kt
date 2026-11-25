@@ -290,7 +290,7 @@ class UmbraHttp(
 
     /** 收到自己服务端的响应后记账：在线了、会话失效、凭证状态。 */
     private fun note(resp: Response, sentToken: String) {
-        val code = resp.header(SessionRevokeRules.ERROR_HEADER)
+        val code = SessionRevokeRules.errorCode { resp.header(it) }
         _offline.value = false
         if (SessionRevokeRules.http(resp.code, code, resp.header(SessionRevokeRules.SESSION_HEADER))) {
             onSessionInvalid(sentToken)
@@ -304,10 +304,10 @@ class UmbraHttp(
 
     private fun handle(resp: Response, sentToken: String): HttpResult {
         val text = resp.body.string()
-        val code = resp.header(SessionRevokeRules.ERROR_HEADER)
+        val code = SessionRevokeRules.errorCode { resp.header(it) }
         note(resp, sentToken)
         if (resp.code in 200..299) return HttpResult.Ok(resp.code, text, resp.headers)
-        // 分档看头 X-Umbra-Error，没有再看 body 的 code；detail 只用来显示
+        // 分档看错误头（先 X-Quetail-Error，回退 X-Umbra-Error），没有再看 body 的 code；detail 只用来显示
         val parsed = runCatching { UmbraJson.parseToJsonElement(text).jsonObject }.getOrNull()
         val bodyCode = parsed?.get("code")?.let { runCatching { it.jsonPrimitive.content }.getOrNull() }
         val detail = parsed?.get("detail")?.let { d -> runCatching { d.jsonPrimitive.content }.getOrElse { d.toString() } }
